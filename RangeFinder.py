@@ -47,7 +47,7 @@ def measure():
 try:
     while True:
         distance = measure()
-        print ("  Distance : %.1f cm") % distance
+        print ("  Distance : %.1f cm" % distance)
         time.sleep(1)
 
 except KeyboardInterrupt:
