@@ -21,56 +21,61 @@ GPIO.setup(GPIO_LED, GPIO.OUT)       # Output til LED
 GPIO.output(GPIO_TRIGECHO, False)
 
 def measure():
-  # This function measures a distance
-  # Pulse the trigger/echo line to initiate a measurement
+    """Måler afstand med ultralydssensoren"""
     GPIO.output(GPIO_TRIGECHO, True)
     time.sleep(0.00001)
     GPIO.output(GPIO_TRIGECHO, False)
-  #ensure start time is set in case of very quick return
+    
+    # Skift til input for at modtage echo
+    GPIO.setup(GPIO_TRIGECHO, GPIO.IN)
     start = time.time()
 
-  # set line to input to check for start of echo response
-    GPIO.setup(GPIO_TRIGECHO, GPIO.IN)
-    while GPIO.input(GPIO_TRIGECHO)==0:
+    while GPIO.input(GPIO_TRIGECHO) == 0:
         start = time.time()
-
-  # Wait for end of echo response
-    while GPIO.input(GPIO_TRIGECHO)==1:
+    
+    while GPIO.input(GPIO_TRIGECHO) == 1:
         stop = time.time()
-  
+    
     GPIO.setup(GPIO_TRIGECHO, GPIO.OUT)
     GPIO.output(GPIO_TRIGECHO, False)
-
-    elapsed = stop-start
-    distance = (elapsed * 34300)/2.0
-    time.sleep(0.1)
+    
+    elapsed = stop - start
+    distance = (elapsed * 34300) / 2.0
     return distance
 
-try:
+def led_control():
+    """Styrer LED-blink afhængigt af den aktuelle afstand"""
+    global current_distance
     while True:
-        distance = measure()
-        print("  Distance : %.1f cm" % distance)
-
-        # LED-blink afhængigt af afstand
-        if 25 <= distance <= 30:
+        if 25 <= current_distance <= 30:
             GPIO.output(GPIO_LED, True)
             time.sleep(0.5)
             GPIO.output(GPIO_LED, False)
             time.sleep(1.5)  # Total blinkperiode = 2 sek
 
-        elif 18 <= distance < 25:
+        elif 18 <= current_distance < 25:
             GPIO.output(GPIO_LED, True)
             time.sleep(0.5)
             GPIO.output(GPIO_LED, False)
             time.sleep(0.5)  # Total blinkperiode = 1 sek
 
-        elif distance < 18:
+        elif current_distance < 18:
             GPIO.output(GPIO_LED, True)  # Konstant tændt
 
         else:
             GPIO.output(GPIO_LED, False)  # Slukket hvis uden for range
-        
-        time.sleep(0.1)
+
+        time.sleep(0.1)  # Kort pause, så loopet kører jævnt
+
+# Start LED-tråd
+led_thread = threading.Thread(target=led_control, daemon=True)
+led_thread.start()
+
+try:
+    while True:
+        current_distance = measure()
+        print("  Distance : %.1f cm" % current_distance)
+        time.sleep(1)  # Udskriv afstand hvert sekund
 
 except KeyboardInterrupt:
     print("Stop")
