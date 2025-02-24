@@ -8,12 +8,14 @@ GPIO.setmode(GPIO.BCM)
 
 # Define GPIO to use on Pi
 GPIO_TRIGECHO = 15
+GPIO_LED = 17 # LED.
 
 print ("Ultrasonic Measurement")
 
 # Set pins as output and input
 GPIO.setup(GPIO_TRIGECHO,GPIO.OUT)  # Initial state as output
 
+GPIO.setup(GPIO_LED, GPIO.OUT)       # Output til LED
 
 # Set trigger to False (Low)
 GPIO.output(GPIO_TRIGECHO, False)
@@ -47,8 +49,28 @@ def measure():
 try:
     while True:
         distance = measure()
-        print ("  Distance : %.1f cm" % distance)
-        time.sleep(1)
+        print("  Distance : %.1f cm" % distance)
+
+        # LED-blink afhængigt af afstand
+        if 25 <= distance <= 30:
+            GPIO.output(GPIO_LED, True)
+            time.sleep(0.5)
+            GPIO.output(GPIO_LED, False)
+            time.sleep(1.5)  # Total blinkperiode = 2 sek
+
+        elif 18 <= distance < 25:
+            GPIO.output(GPIO_LED, True)
+            time.sleep(0.5)
+            GPIO.output(GPIO_LED, False)
+            time.sleep(0.5)  # Total blinkperiode = 1 sek
+
+        elif distance < 18:
+            GPIO.output(GPIO_LED, True)  # Konstant tændt
+
+        else:
+            GPIO.output(GPIO_LED, False)  # Slukket hvis uden for range
+        
+        time.sleep(0.1)
 
 except KeyboardInterrupt:
     print("Stop")
