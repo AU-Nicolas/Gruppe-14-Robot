@@ -80,29 +80,34 @@ class Turtlebot3ObstacleDetection(Node):
 		if self.init_scan_state is True:
 					self.detect_obstacle()
 	def detect_obstacle(self):
-		left_range = int(len(self.scan_ranges) / 4) - 20
-		right_range = int(len(self.scan_ranges) * 3 / 4) + 20
+		# Definer vinkler for forskellige retninger
+		front_left_range = 350
+		front_right_range = 10
+		left_range = 270
+		right_range = 90
 
-		obstacle_distance_left = min(self.scan_ranges[0:left_range])
-		obstacle_distance_right = min(self.scan_ranges[right_range:360])
+		# Find mindste afstand til forhindringer i forskellige retninger
+		obstacle_distance_front = min(min(self.scan_ranges[front_left_range:360]), min(self.scan_ranges[0:front_right_range]))
+		obstacle_distance_left = min(self.scan_ranges[left_range:350])
+		obstacle_distance_right = min(self.scan_ranges[10:right_range])
 	
 		twist = Twist()
-		obstacle_distance = min(self.scan_ranges)
-		safety_distance = 0.5  # unit: m
-		stop_distance = 0.2
+		safety_distance = 0.5  # Sikkerhedsafstand i meter
+		stop_distance = 0.2  # Stopafstand i meter
 
-		if obstacle_distance_left < stop_distance or obstacle_distance_right < stop_distance:
-			twist.linear.x = -self.linear_velocity
+		# Bestem bevægelse baseret på afstand til forhindringer
+		if obstacle_distance_front < stop_distance:
+			twist.linear.x = -self.linear_velocity  # Kør baglæns
 			twist.angular.z = 0.0
 		elif obstacle_distance_left < safety_distance:
-			twist.linear.x = self.linear_velocity
-			twist.angular.z = -self.angular_velocity
+			twist.linear.x = self.linear_velocity  # Kør fremad
+			twist.angular.z = -self.angular_velocity  # Drej til højre
 		elif obstacle_distance_right < safety_distance:
-			twist.linear.x = self.linear_velocity
-			twist.angular.z = self.angular_velocity         
+			twist.linear.x = self.linear_velocity  # Kør fremad
+			twist.angular.z = self.angular_velocity  # Drej til venstre         
 		else:
-			twist.linear.x = self.linear_velocity
-			twist.angular.z = 0.0
+			twist.linear.x = self.linear_velocity  # Kør fremad
+			twist.angular.z = 0.0  # Ingen rotation
 
 
 		self.cmd_vel_pub.publish(twist)
