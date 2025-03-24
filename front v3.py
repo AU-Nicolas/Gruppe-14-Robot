@@ -115,26 +115,32 @@ class Turtlebot3ObstacleDetection(Node):
         # Navigation baseret på afstande
         if obstacle_distance_front < stop_distance:
             # Forhindring for tæt på, bevæg baglæns
+            self.get_logger().info('Obstacle detected in FRONT. Moving backward.')
             twist.linear.x = -self.linear_velocity
             twist.angular.z = 0.0
         elif obstacle_distance_left_front < safety_distance:
             # Forhindring tæt på venstre front, drej til højre
-            twist.linear.x = self.linear_velocity
-            twist.angular.z = -self.angular_velocity
-        elif obstacle_distance_right_front < safety_distance:
-            # Forhindring tæt på højre front, drej til venstre
-            twist.linear.x = self.linear_velocity
-            twist.angular.z = self.angular_velocity
-        elif obstacle_distance_left < safety_distance:
-            # Forhindring tæt på venstre, drej skarpt til højre
+            self.get_logger().info('Obstacle detected in FRONT-LEFT. Turning sharply right.')
             twist.linear.x = self.linear_velocity
             twist.angular.z = -self.angular_velocity * 1.5
-        elif obstacle_distance_right < safety_distance:
-            # Forhindring tæt på højre, drej skarpt til venstre
+        elif obstacle_distance_right_front < safety_distance:
+            # Forhindring tæt på højre front, drej til venstre
+            self.get_logger().info('Obstacle detected in FRONT-RIGHT. Turning sharply left.')
             twist.linear.x = self.linear_velocity
             twist.angular.z = self.angular_velocity * 1.5
+        elif obstacle_distance_left < safety_distance:
+            # Forhindring tæt på venstre, drej skarpt til højre
+            self.get_logger().info('Obstacle detected in LEFT. Turning right.')
+            twist.linear.x = self.linear_velocity
+            twist.angular.z = -self.angular_velocity * 0.8
+        elif obstacle_distance_right < safety_distance:
+            # Forhindring tæt på højre, drej skarpt til venstre
+            self.get_logger().info('Obstacle detected in RIGHT. Turning left.')
+            twist.linear.x = self.linear_velocity
+            twist.angular.z = self.angular_velocity * 0.8
         else:
             # Ingen forhindringer tæt på, bevæg fremad
+            self.get_logger().info('No obstacles detected. Moving forward.')
             twist.linear.x = self.linear_velocity
             twist.angular.z = 0.0
 
