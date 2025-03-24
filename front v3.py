@@ -22,6 +22,7 @@ from rclpy.qos import qos_profile_sensor_data
 from rclpy.qos import QoSProfile
 from sensor_msgs.msg import LaserScan
 import rclpy
+import time
 
 
 class Turtlebot3ObstacleDetection(Node):
@@ -36,6 +37,8 @@ class Turtlebot3ObstacleDetection(Node):
         self.angular_velocity = 1.5  # unit: m/s
         self.scan_ranges = []
         self.init_scan_state = False  # To get the initial scan data at the beginning
+        self.speed_accumulation = 0
+        self.speed_updates = 0
 
         """************************************************************
         ** Initialise ROS publishers and subscribers
@@ -81,6 +84,9 @@ class Turtlebot3ObstacleDetection(Node):
         if self.init_scan_state is True:
             self.detect_obstacle()
 
+    def get_average_speed(self):
+        return self.speed_accumulation/self.speed_updates
+
     # *** NAVIGATIONS PROGRAMMET ***
 
     # LIDAR sensorens syn:
@@ -115,42 +121,51 @@ class Turtlebot3ObstacleDetection(Node):
         # Navigation baseret på afstande
         if obstacle_distance_front < stop_distance:
             # Forhindring for tæt på, bevæg baglæns
-            self.get_logger().info('Obstacle detected in FRONT. Moving backward.')
+            # self.get_logger().info('Obstacle detected in FRONT. Moving backward.')
             twist.linear.x = -self.linear_velocity
             twist.angular.z = 0.0
         elif obstacle_distance_left_front < safety_distance:
             # Forhindring tæt på venstre front, drej til venstre
-            self.get_logger().info('Obstacle detected in FRONT-LEFT. Turning sharply left.')
+            # self.get_logger().info('Obstacle detected in FRONT-LEFT. Turning sharply left.')
             twist.linear.x = self.linear_velocity
             twist.angular.z = self.angular_velocity * 1.5
         elif obstacle_distance_right_front < safety_distance:
             # Forhindring tæt på højre front, drej til højre
-            self.get_logger().info('Obstacle detected in FRONT-RIGHT. Turning sharply right.')
+            # self.get_logger().info('Obstacle detected in FRONT-RIGHT. Turning sharply right.')
             twist.linear.x = self.linear_velocity
             twist.angular.z = -self.angular_velocity * 1.5
         elif obstacle_distance_left < safety_distance:
             # Forhindring tæt på venstre, drej til venstre
-            self.get_logger().info('Obstacle detected in LEFT. Turning left.')
+            # self.get_logger().info('Obstacle detected in LEFT. Turning left.')
             twist.linear.x = self.linear_velocity
             twist.angular.z = self.angular_velocity * 1.0
         elif obstacle_distance_right < safety_distance:
             # Forhindring tæt på højre, drej til højre
-            self.get_logger().info('Obstacle detected in RIGHT. Turning right.')
+            # self.get_logger().info('Obstacle detected in RIGHT. Turning right.')
             twist.linear.x = self.linear_velocity
             twist.angular.z = -self.angular_velocity * 1.0
         else:
             # Ingen forhindringer tæt på, bevæg fremad
-            self.get_logger().info('No obstacles detected. Moving forward.')
+            # self.get_logger().info('No obstacles detected. Moving forward.')
             twist.linear.x = self.linear_velocity
             twist.angular.z = 0.0
 
         self.cmd_vel_pub.publish(twist)
 
+        self.speed_accumulation += self.linear_velocity
+        self.speed_updates += 1
 
 def main(args=None):
     rclpy.init(args=args)
     turtlebot3_obstacle_detection = Turtlebot3ObstacleDetection()
-    rclpy.spin(turtlebot3_obstacle_detection)
+
+    start_time = time.time()
+    end_time = start_time + 10.0
+
+    while time.time() < end_time:
+        rclpy.spin_once(turtlebot3_obstacle_detection, timeout_sec=0.1)
+
+    print("Average speed: ", turtlebot3_obstacle_detection.get_average_speed())
 
     turtlebot3_obstacle_detection.destroy_node()
     rclpy.shutdown()
