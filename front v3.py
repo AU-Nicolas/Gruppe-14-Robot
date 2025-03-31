@@ -39,6 +39,7 @@ class Turtlebot3ObstacleDetection(Node):
         self.init_scan_state = False  # To get the initial scan data at the beginning
         self.speed_accumulation = 0
         self.speed_updates = 0
+        self.collision_counter = 0 # Collision counter
 
         """************************************************************
         ** Initialise ROS publishers and subscribers
@@ -86,6 +87,17 @@ class Turtlebot3ObstacleDetection(Node):
 
     def get_average_speed(self):
         return self.speed_accumulation/self.speed_updates
+    
+    def stop_robot(self):
+        # Stop robot
+        twist = Twist()
+        twist.linear.x = 0.0
+        twist.angular.z = 0.0
+        self.cmd_vel_pub.publish(twist)
+        self.get_logger().info('Robot stopped.')
+
+    def get_collision_counter(self):
+        return self.collision_counter
 
     # *** NAVIGATIONS PROGRAMMET ***
 
@@ -114,16 +126,19 @@ class Turtlebot3ObstacleDetection(Node):
         obstacle_distance_right_front = min(right_front) if right_front else float('inf')
         obstacle_distance_right = min(right) if right else float('inf')
 
+
         twist = Twist()
         safety_distance = 0.5  # Sikkerhedsafstand
         stop_distance = 0.2  # Stopafstand
+        collision_distance = 0.15  # Kollisionsafstand
 
         # Navigation baseret på afstande
         if obstacle_distance_front < stop_distance:
             # Forhindring for tæt på, bevæg baglæns
-            # self.get_logger().info('Obstacle detected in FRONT. Moving backward.')
+            self.get_logger().info('Obstacle detected in FRONT. Moving backward.')
             twist.linear.x = -self.linear_velocity
             twist.angular.z = 0.0
+            # self.get_logger().info(f"Collision count incremented: {self.collision_counter}")
         elif obstacle_distance_left_front < safety_distance:
             # Forhindring tæt på venstre front, drej til venstre
             # self.get_logger().info('Obstacle detected in FRONT-LEFT. Turning sharply left.')
@@ -152,24 +167,11 @@ class Turtlebot3ObstacleDetection(Node):
 
         self.cmd_vel_pub.publish(twist)
 
-        self.speed_accumulation += self.linear_velocity
-        self.speed_updates += 1
+        # Calculate average speed:
+        self.speed_updates = self.speed_updates + 1
+        self.speed_accumulation = self.speed_accumulation + twist.linear.x
 
-def main(args=None):
-    rclpy.init(args=args)
-    turtlebot3_obstacle_detection = Turtlebot3ObstacleDetection()
-
-    start_time = time.time()
-    end_time = start_time + 10.0
-
-    while time.time() < end_time:
-        rclpy.spin_once(turtlebot3_obstacle_detection, timeout_sec=0.1)
-
-    print("Average speed: ", turtlebot3_obstacle_detection.get_average_speed())
-
-    turtlebot3_obstacle_detection.destroy_node()
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
+        # Calculate collision counter:
+        if obstacle_distance_front < 0.17:
+            self.collision_counter += 1
+            self.get_logger().info(f"Collision count incremented: {self.collision_counter}")
