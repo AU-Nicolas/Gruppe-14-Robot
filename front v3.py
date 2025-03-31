@@ -23,7 +23,7 @@ from rclpy.qos import QoSProfile
 from sensor_msgs.msg import LaserScan
 import rclpy
 import time
-
+import smbus
 
 class Turtlebot3ObstacleDetection(Node):
 
@@ -40,6 +40,7 @@ class Turtlebot3ObstacleDetection(Node):
         self.speed_accumulation = 0
         self.speed_updates = 0
         self.collision_counter = 0 # Collision counter
+        self.victim_counter = 0 # Victim counter i forhold til RGB.
 
         """************************************************************
         ** Initialise ROS publishers and subscribers
@@ -62,11 +63,22 @@ class Turtlebot3ObstacleDetection(Node):
             qos)
 
         """************************************************************
+        ** Initialise RGB sensor // Hjemme lavet:-)
+        ************************************************************"""
+        self.bus = smbus.SMBus(1) # I2C bus.
+        self.bus.write_byte_data(0x44, 0x01, 0x05)
+        time.sleep(1)
+
+        """************************************************************
         ** Initialise timers
         ************************************************************"""
         self.update_timer = self.create_timer(
             0.010,  # unit: s
             self.update_callback)
+        
+        self.rgb_timer = self.create_timer( # RGB timer, i forhold til aflæsning.
+            2.0,  # unit: s
+            self.read_rgb_sensor)
 
         self.get_logger().info('Turtlebot3 obstacle detection node has been initialised.')
 
@@ -84,7 +96,7 @@ class Turtlebot3ObstacleDetection(Node):
     def update_callback(self):
         if self.init_scan_state is True:
             self.detect_obstacle()
-
+ 
     def get_average_speed(self):
         return self.speed_accumulation/self.speed_updates
     
@@ -98,6 +110,24 @@ class Turtlebot3ObstacleDetection(Node):
 
     def get_collision_counter(self):
         return self.collision_counter
+
+    def read_rgb_sensor(self):
+        try:
+            data = self.bus.read_i2c_block_data(0x44, 0x09, 6)  # Read RGB data
+            green = data[1] + data[0] / 256
+            red = data[3] + data[2] / 256
+            blue = data[5] + data[4] / 256
+
+            # Determine the color:
+            if red > green and red > blue:
+                self.victim_counter += 1
+                self.get_logger().info('Victim detected')
+
+        except Exception as e:
+            self.get_logger().error(f"Error reading RGB sensor: {e}")
+
+    def get_victim_counter(self):
+        return self.victim_counter
 
     # *** NAVIGATIONS PROGRAMMET ***
 
@@ -172,6 +202,6 @@ class Turtlebot3ObstacleDetection(Node):
         self.speed_accumulation = self.speed_accumulation + twist.linear.x
 
         # Calculate collision counter:
-        if obstacle_distance_front < 0.17:
+        if obstacle_distance_front or obstacle_distance_left_front or obstacle_distance_right_front < collision_distance:
             self.collision_counter += 1
-            self.get_logger().info(f"Collision count incremented: {self.collision_counter}")
+            # self.get_logger().info(f"Collision count incremented: {self.collision_counter}")

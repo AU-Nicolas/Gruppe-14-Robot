@@ -18,19 +18,20 @@
 
 import rclpy
 import time
+# import smbus2 as smbus # Til RGB sensor.
+import smbus
 
 from turtlebot3_example.turtlebot3_obstacle_detection.turtlebot3_obstacle_detection \
     import Turtlebot3ObstacleDetection
 
 
 def main(args=None):
-    print("Test: Print is working.")
+    print("Test: Main is working.")
     rclpy.init(args=None)
     turtlebot3_obstacle_detection = Turtlebot3ObstacleDetection()
 
     start_time = time.time()
-    end_time = start_time + 10.0
-    print(end_time)
+    end_time = start_time + 120.0
 
     while time.time() < end_time:
         rclpy.spin_once(turtlebot3_obstacle_detection, timeout_sec=0.1)
@@ -40,6 +41,7 @@ def main(args=None):
     # Print af stats:
     print("Average speed:", turtlebot3_obstacle_detection.get_average_speed())
     print("\nCollision counter:", turtlebot3_obstacle_detection.get_collision_counter())
+    print("\nVictim counter:", turtlebot3_obstacle_detection.get_victim_counter())
 
     turtlebot3_obstacle_detection.destroy_node()
     rclpy.shutdown()
