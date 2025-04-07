@@ -42,6 +42,7 @@ class Turtlebot3ObstacleDetection(Node):
         self.speed_updates = 0
         self.collision_counter = 0 # Collision counter
         self.victim_counter = 0 # Victim counter i forhold til RGB.
+        self.is_rotating = False # Rotationstilstand i forhold til navigation.
 
         """************************************************************
         ** Initialise GPIO for LED
@@ -149,6 +150,7 @@ class Turtlebot3ObstacleDetection(Node):
     # *** NAVIGATIONS PROGRAMMET ***
 
     # LIDAR sensorens syn:
+
     def detect_obstacle(self):
         # Samlede antal scanningsområder fra lidar
         total_ranges = len(self.scan_ranges)
@@ -173,29 +175,53 @@ class Turtlebot3ObstacleDetection(Node):
         obstacle_distance_right_front = min(right_front) if right_front else float('inf')
         obstacle_distance_right = min(right) if right else float('inf')
 
-
+        # Navigations distancer:
         twist = Twist()
-        safety_distance = 0.5  # Sikkerhedsafstand
+        safety_distance = 0.4  # Sikkerhedsafstand
         stop_distance = 0.2  # Stopafstand
         collision_distance = 0.15  # Kollisionsafstand
 
-        # Navigation baseret på afstande
+        if self.is_rotating: # If the robot is rotating, then don't do anything else.
+            return
+
+        # NAVIGATIONs PARAMETRER:
+
         if obstacle_distance_front < stop_distance:
             # Forhindring for tæt på, bevæg baglæns
-            # self.get_logger().info('Obstacle detected in FRONT. Moving backward.')
+            self.is_rotating = True # Robotten roterer, så intet andet skal ske.
+            self.get_logger().info('Obstacle detected in FRONT. Moving backwards.')
             twist.linear.x = -self.linear_velocity
             twist.angular.z = 0.0
-            # self.get_logger().info(f"Collision count incremented: {self.collision_counter}")
+            self.cmd_vel_pub.publish(twist)
+            time.sleep(0.5)
+            # Determine the direction to turn based on the furthest distance
+            if obstacle_distance_right + obstacle_distance_right_front > obstacle_distance_left + obstacle_distance_left_front:
+                self.get_logger().info('Turning right.')
+                twist.linear.x = 0.0
+                twist.angular.z = -self.angular_velocity
+            else:
+                self.get_logger().info('Turning left.')
+                twist.linear.x = 0.0
+                twist.angular.z = self.angular_velocity
+
+            self.cmd_vel_pub.publish(twist)
+            time.sleep(0.8)  # Rotations period.
+
+            twist.linear.x = 0.0
+            twist.angular.z = 0.0
+            self.cmd_vel_pub.publish(twist)
+            self.is_rotating = False  # Færdig med rotation.
+
         elif obstacle_distance_left_front < safety_distance:
             # Forhindring tæt på venstre front, drej til venstre
             # self.get_logger().info('Obstacle detected in FRONT-LEFT. Turning sharply left.')
-            twist.linear.x = self.linear_velocity
-            twist.angular.z = self.angular_velocity * 1.3
+            twist.linear.x = self.linear_velocity * 1
+            twist.angular.z = self.angular_velocity * 1.1
         elif obstacle_distance_right_front < safety_distance:
             # Forhindring tæt på højre front, drej til højre
             # self.get_logger().info('Obstacle detected in FRONT-RIGHT. Turning sharply right.')
-            twist.linear.x = self.linear_velocity
-            twist.angular.z = -self.angular_velocity * 1.3
+            twist.linear.x = self.linear_velocity * 1
+            twist.angular.z = -self.angular_velocity * 1.1
         elif obstacle_distance_left < safety_distance:
             # Forhindring tæt på venstre, drej til venstre
             # self.get_logger().info('Obstacle detected in LEFT. Turning left.')
