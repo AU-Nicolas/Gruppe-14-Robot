@@ -24,6 +24,7 @@ from sensor_msgs.msg import LaserScan
 import rclpy
 import time
 import smbus
+import RPi.GPIO as GPIO  # For LED
 
 class Turtlebot3ObstacleDetection(Node):
 
@@ -41,6 +42,13 @@ class Turtlebot3ObstacleDetection(Node):
         self.speed_updates = 0
         self.collision_counter = 0 # Collision counter
         self.victim_counter = 0 # Victim counter i forhold til RGB.
+
+        """************************************************************
+        ** Initialise GPIO for LED
+        ************************************************************"""
+        GPIO.setmode(GPIO.BCM)  # Brug BCM GPIO-numre
+        self.GPIO_LED = 17  # LED 3.3 v sat til pin 17.
+        GPIO.setup(self.GPIO_LED, GPIO.OUT)  # Konfigurer LED som output
 
         """************************************************************
         ** Initialise ROS publishers and subscribers
@@ -118,13 +126,22 @@ class Turtlebot3ObstacleDetection(Node):
             red = data[3] + data[2] / 256
             blue = data[5] + data[4] / 256
 
-            # Determine the color:
+            # Determine the color/ if victim is detected:
             if red > green and red > blue:
                 self.victim_counter += 1
                 self.get_logger().info('Victim detected')
+                GPIO.output(self.GPIO_LED, True) # Turns on the LED.
+                time.sleep(2) # Wait for 2 seconds.
+                GPIO.output(self.GPIO_LED, False) # Turns off the LED.
 
+        # In case we get a weird value
         except Exception as e:
             self.get_logger().error(f"Error reading RGB sensor: {e}")
+
+    def destroy_node(self):
+        # Clean up GPIO
+        GPIO.cleanup()  # Clean up GPIO settings
+        super().destroy_node()
 
     def get_victim_counter(self):
         return self.victim_counter
@@ -165,7 +182,7 @@ class Turtlebot3ObstacleDetection(Node):
         # Navigation baseret på afstande
         if obstacle_distance_front < stop_distance:
             # Forhindring for tæt på, bevæg baglæns
-            self.get_logger().info('Obstacle detected in FRONT. Moving backward.')
+            # self.get_logger().info('Obstacle detected in FRONT. Moving backward.')
             twist.linear.x = -self.linear_velocity
             twist.angular.z = 0.0
             # self.get_logger().info(f"Collision count incremented: {self.collision_counter}")
