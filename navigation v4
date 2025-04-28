@@ -42,6 +42,7 @@ class Turtlebot3ObstacleDetection(Node):
         self.speed_updates = 0
         self.collision_counter = 0 # Collision counter
         self.victim_counter = 0 # Victim counter i forhold til RGB.
+        self.victim_detected_RGB = False
         self.is_rotating = False # Rotationstilstand i forhold til navigation.
         self.collision_detected = False  # State variabel for kollision
         self.is_in_collision = False  # State variabel for kollision
@@ -131,11 +132,15 @@ class Turtlebot3ObstacleDetection(Node):
 
             # Determine the color/ if victim is detected:
             if red > green and red > blue:
-                self.victim_counter += 1
-                self.get_logger().info('Victim detected')
-                GPIO.output(self.GPIO_LED, True) # Turns on the LED.
-                time.sleep(2) # Wait for 2 seconds.
-                GPIO.output(self.GPIO_LED, False) # Turns off the LED.
+                if not self.victim_detected_RGB:
+                    self.victim_counter += 1
+                    self.get_logger().info('Victim detected')
+                    GPIO.output(self.GPIO_LED, True) # Turns on the LED.
+                    time.sleep(2) # Wait for 2 seconds.
+                    GPIO.output(self.GPIO_LED, False) # Turns off the LED.
+                self.victim_detected_RGB = True
+            else:
+                self.victim_detected_RGB = False
 
         # In case we get a weird value
         except Exception as e:
@@ -190,30 +195,31 @@ class Turtlebot3ObstacleDetection(Node):
 
         if obstacle_distance_front < stop_distance:
             # Forhindring for tæt på, bevæg baglæns
-            self.is_rotating = True # Robotten roterer, så intet andet skal ske.
-            if self.is_rotating == True:
-                self.get_logger().info('Obstacle detected in FRONT. Moving backwards.')
-                twist.linear.x = -self.linear_velocity
-                twist.angular.z = 0.0
-                self.cmd_vel_pub.publish(twist)
-                time.sleep(0.5)
+            self.get_logger().info('Obstacle detected in FRONT. Moving backwards.')
+            twist.linear.x = -self.linear_velocity
+            twist.angular.z = 0.0
+            self.cmd_vel_pub.publish(twist)
                 # Determine the direction to turn based on the furthest distance
+            if not self.is_rotating:
                 if obstacle_distance_right + obstacle_distance_right_front > obstacle_distance_left + obstacle_distance_left_front:
                     self.get_logger().info('Turning right.')
                     twist.linear.x = 0.0
-                    twist.angular.z = -self.angular_velocity
+                    twist.angular.z = -self.angular_velocity * 1.0
                 else:
                     self.get_logger().info('Turning left.')
                     twist.linear.x = 0.0
-                    twist.angular.z = self.angular_velocity
+                    twist.angular.z = self.angular_velocity * 1.0
+                self.is_rotating = True  # Indikerer at robotten roterer
+            else:
+                self.is_rotating = False  # Stop rotation
 
-                self.cmd_vel_pub.publish(twist)
-                time.sleep(0.8)  # Rotations period.
+            self.cmd_vel_pub.publish(twist)
+            time.sleep(0.8)  # Rotations period.
 
-                twist.linear.x = 0.0
-                twist.angular.z = 0.0
-                self.cmd_vel_pub.publish(twist)
-                self.is_rotating = False  # Færdig med rotation.
+            twist.linear.x = 0.0
+            twist.angular.z = 0.0
+            self.cmd_vel_pub.publish(twist)
+            self.is_rotating = False  # Færdig med rotation.
 
         elif obstacle_distance_left_front < safety_distance:
             # Forhindring tæt på venstre front, drej til venstre
