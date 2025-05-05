@@ -96,7 +96,7 @@ class Turtlebot3ObstacleDetection(Node):
             self.update_callback)
         
         self.rgb_timer = self.create_timer( # RGB timer, i forhold til aflæsning.
-            2.0,  # unit: s
+            0.2,  # unit: s
             self.read_rgb_sensor)
 
         self.get_logger().info('Turtlebot3 obstacle detection node has been initialised.')
@@ -140,18 +140,31 @@ class Turtlebot3ObstacleDetection(Node):
         try:
             data = self.bus.read_i2c_block_data(0x44, 0x09, 6)  # Read RGB data
             green = data[1] + data[0] / 256
+            print("##################")
+            print("Green:", green)
             red = data[3] + data[2] / 256
+            print("Red:", red)
             blue = data[5] + data[4] / 256
+            print("Blue:", blue)
+
+            # Gulv værdier:
+            # Grøn:
+            # Rød: 
+            # Blå:
+
+
+            current_time = time.time()
 
             # Determine the color/ if victim is detected:
             if red > green and red > blue:
-                if not self.victim_detected_RGB:
+                if not self.victim_detected_RGB or (current_time - self.last_victim_time > 5.0):
                     self.victim_counter += 1
                     self.get_logger().info('Victim detected')
                     GPIO.output(self.GPIO_LED, True) # Turns on the LED.
                     time.sleep(2) # Wait for 2 seconds.
                     GPIO.output(self.GPIO_LED, False) # Turns off the LED.
-                self.victim_detected_RGB = True
+                    self.victim_detected_RGB = True
+                    self.last_victim_time = current_time
             else:
                 self.victim_detected_RGB = False
 
@@ -234,8 +247,8 @@ class Turtlebot3ObstacleDetection(Node):
         # Navigations distancer:
         twist = Twist()
         safety_distance = 0.4  # Sikkerhedsafstand
-        stop_distance = 0.25  # Stopafstand
-        collision_distance = 0.21  # Kollisionsafstand
+        stop_distance = 0.23  # Stopafstand
+        collision_distance = 0.19  # Kollisionsafstand
 
         # NAVIGATIONs PARAMETRER:
 
