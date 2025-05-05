@@ -45,6 +45,7 @@ class Turtlebot3ObstacleDetection(Node):
         self.victim_detected_RGB = False
         self.is_rotating = False # Rotationstilstand i forhold til navigation.
         self.collision_detected = False  # State variabel for kollision
+        self.last_collision_time = 0
         self.is_in_collision = False  # State variabel for kollision
         
         # Path finder variabler:
@@ -117,6 +118,12 @@ class Turtlebot3ObstacleDetection(Node):
  
     def get_average_speed(self):
         return self.speed_accumulation/self.speed_updates
+
+    def get_speed_accumulation(self):
+        return self.speed_accumulation
+    
+    def get_speed_updates(self):
+        return self.speed_updates
     
     def stop_robot(self):
         # Stop robot
@@ -228,10 +235,7 @@ class Turtlebot3ObstacleDetection(Node):
         twist = Twist()
         safety_distance = 0.4  # Sikkerhedsafstand
         stop_distance = 0.25  # Stopafstand
-        collision_distance = 0.18  # Kollisionsafstand
-
-        if self.is_rotating: # If the robot is rotating, then don't do anything else.
-            return
+        collision_distance = 0.21  # Kollisionsafstand
 
         # NAVIGATIONs PARAMETRER:
 
@@ -278,12 +282,12 @@ class Turtlebot3ObstacleDetection(Node):
         elif obstacle_distance_left_front < safety_distance:
             # Forhindring tæt på venstre front, drej til venstre
             # self.get_logger().info('Obstacle detected in FRONT-LEFT. Turning sharply left.')
-            twist.linear.x = self.linear_velocity * 1
+            twist.linear.x = self.linear_velocity
             twist.angular.z = self.angular_velocity * 1.1
         elif obstacle_distance_right_front < safety_distance:
             # Forhindring tæt på højre front, drej til højre
             # self.get_logger().info('Obstacle detected in FRONT-RIGHT. Turning sharply right.')
-            twist.linear.x = self.linear_velocity * 1
+            twist.linear.x = self.linear_velocity
             twist.angular.z = -self.angular_velocity * 1.1
         elif obstacle_distance_left < safety_distance:
             # Forhindring tæt på venstre, drej til venstre
@@ -314,13 +318,18 @@ class Turtlebot3ObstacleDetection(Node):
         is_collision = (obstacle_distance_front < collision_distance or 
                     obstacle_distance_left_front < collision_distance or 
                     obstacle_distance_right_front < collision_distance)
+        
+        current_time = time.time()
+    
 
         # Hvis vi registrerer en kollision og ikke er i en kollisionstilstand
-        if is_collision and not self.is_in_collision:
+        if is_collision:
+            if not self.is_in_collision:
             # Tjek om der er gået nok tid siden sidste kollision
-            if not self.collision_detected:
-                self.collision_counter += 1
-                self.get_logger().info(f"Collision detected! Total collisions: {self.collision_counter}")
-                self.collision_detected = True  # Mark that we already counted this collision
-            else:
-                self.collision_detected = False  # Reset flag once robot moves away
+                if current_time - self.last_collision_time > 1.5:
+                    self.collision_counter += 1
+                    self.get_logger().info(f"Collision detected! Total collisions: {self.collision_counter}")
+                    self.last_collision_time = current_time
+                self.is_in_collision = True
+        else:
+            self.is_in_collision = False
