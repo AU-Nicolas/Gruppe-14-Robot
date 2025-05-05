@@ -282,22 +282,22 @@ class Turtlebot3ObstacleDetection(Node):
         elif obstacle_distance_left_front < safety_distance:
             # Forhindring tæt på venstre front, drej til venstre
             # self.get_logger().info('Obstacle detected in FRONT-LEFT. Turning sharply left.')
-            twist.linear.x = self.linear_velocity
+            twist.linear.x = self.linear_velocity * 0.3
             twist.angular.z = self.angular_velocity * 1.1
         elif obstacle_distance_right_front < safety_distance:
             # Forhindring tæt på højre front, drej til højre
             # self.get_logger().info('Obstacle detected in FRONT-RIGHT. Turning sharply right.')
-            twist.linear.x = self.linear_velocity
+            twist.linear.x = self.linear_velocity * 0.3
             twist.angular.z = -self.angular_velocity * 1.1
         elif obstacle_distance_left < safety_distance:
             # Forhindring tæt på venstre, drej til venstre
             # self.get_logger().info('Obstacle detected in LEFT. Turning left.')
-            twist.linear.x = self.linear_velocity
+            twist.linear.x = self.linear_velocity * 0.9
             twist.angular.z = self.angular_velocity * 0.6
         elif obstacle_distance_right < safety_distance:
             # Forhindring tæt på højre, drej til højre
             # self.get_logger().info('Obstacle detected in RIGHT. Turning right.')
-            twist.linear.x = self.linear_velocity
+            twist.linear.x = self.linear_velocity * 0.9
             twist.angular.z = -self.angular_velocity * 0.6
         else:
             # Ingen forhindringer tæt på, bevæg fremad
