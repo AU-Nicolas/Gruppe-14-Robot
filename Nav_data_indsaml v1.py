@@ -147,7 +147,6 @@ class Turtlebot3ObstacleDetection(Node):
             blue = data[5] + data[4] / 256
             print("Blue:", blue)
 
-
             current_time = time.time()
 
             # Determine the color/ if victim is detected:
@@ -156,9 +155,9 @@ class Turtlebot3ObstacleDetection(Node):
                     self.victim_counter += 1
                     self.get_logger().info('Victim detected')
                     GPIO.output(self.GPIO_LED, True) # Turns on the LED.
+                    self.victim_detected_RGB = True
                     time.sleep(2) # Wait for 2 seconds.
                     GPIO.output(self.GPIO_LED, False) # Turns off the LED.
-                    self.victim_detected_RGB = True
                     self.last_victim_time = current_time
             else:
                 self.victim_detected_RGB = False
@@ -338,6 +337,8 @@ class Turtlebot3ObstacleDetection(Node):
                     self.collision_counter += 1
                     self.get_logger().info(f"Collision detected! Total collisions: {self.collision_counter}")
                     self.last_collision_time = current_time
+                with open('collision_counter.txt', mode='w', encoding="utf-8") as f:
+                    f.write(f"Collision detected! Total collisions: {self.collision_counter}\n")
                 self.is_in_collision = True
         else:
             self.is_in_collision = False
