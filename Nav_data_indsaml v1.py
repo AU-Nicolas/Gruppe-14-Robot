@@ -156,6 +156,8 @@ class Turtlebot3ObstacleDetection(Node):
                     self.get_logger().info('Victim detected')
                     GPIO.output(self.GPIO_LED, True) # Turns on the LED.
                     self.victim_detected_RGB = True
+                    with open('victim_log.txt', mode='w', encoding="utf-8") as f:
+                        f.write(f"{self.collision_counter}\n")
                     time.sleep(2) # Wait for 2 seconds.
                     GPIO.output(self.GPIO_LED, False) # Turns off the LED.
                     self.last_victim_time = current_time
@@ -317,6 +319,8 @@ class Turtlebot3ObstacleDetection(Node):
         # Calculate average speed:
         self.speed_updates = self.speed_updates + 1
         self.speed_accumulation = self.speed_accumulation + twist.linear.x
+        with open('speed_log.txt', mode='w', encoding="utf-8") as f:
+            f.write(f"{self.speed_updates}\n")
 
         # Calculate collision counter:
         current_time = time.time()
@@ -337,8 +341,8 @@ class Turtlebot3ObstacleDetection(Node):
                     self.collision_counter += 1
                     self.get_logger().info(f"Collision detected! Total collisions: {self.collision_counter}")
                     self.last_collision_time = current_time
-                with open('collision_counter.txt', mode='w', encoding="utf-8") as f:
-                    f.write(f"Collision detected! Total collisions: {self.collision_counter}\n")
+                    with open('collision_log.txt', mode='w', encoding="utf-8") as f:
+                        f.write(f"{self.collision_counter}\n")
                 self.is_in_collision = True
         else:
             self.is_in_collision = False
