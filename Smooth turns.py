@@ -181,7 +181,7 @@ class Turtlebot3ObstacleDetection(Node):
                 obstacle_distance_right_front):
 
         twist = Twist()
-        passage_width = obstacle_distance_left_front + obstacle_distance_right_front
+        passage_width = obstacle_distance_left_front + obstacle_distance_right_front + obstacle_distance_front
     
         # Find centrum af passagen
         center_offset = obstacle_distance_right_front - obstacle_distance_left_front
@@ -228,9 +228,9 @@ class Turtlebot3ObstacleDetection(Node):
         else:
             ratio = (obs_distance - stop_distance) / (safety_distance - stop_distance)
             ratio = max(0.0, min(1.0, ratio))
-            linear_x = self.linear_velocity * ratio
+            linear_x = self.linear_velocity * ratio * 1.25
             # The further below safety_distance, the sharper the turn (up to self.angular_velocity)
-            angular_component = self.angular_velocity * (1 - ratio)
+            angular_component = self.angular_velocity * (1 - ratio) * 1.2
         return linear_x, angular_component
 
     def detect_obstacle(self):
@@ -261,7 +261,7 @@ class Turtlebot3ObstacleDetection(Node):
         twist = Twist()
         safety_distance = 0.33  # Sikkerhedsafstand
         stop_distance = 0.19  # Stopafstand
-        collision_distance = 0.17  # Kollisionsafstand
+        collision_distance = 0.17  # Kollisionsafstand (Bruges ikke til navigationen)
 
         # NAVIGATIONs PARAMETRER:
 
@@ -272,15 +272,15 @@ class Turtlebot3ObstacleDetection(Node):
             obstacle_distance_left_front,
             obstacle_distance_right_front
         )
-
+        
         if is_tight_space:
             self.cmd_vel_pub.publish(tight_space_cmd)
             return        
 
         if obstacle_distance_front < stop_distance:
-            # Forhindring for tæt på, bevæg baglæns
+            # Forhindring for tæt på, find ny rute.
             self.get_logger().info('Obstacle detected in FRONT.')
-            twist.linear.x = self.linear_velocity * 1.0
+            twist.linear.x = 0.0
             twist.angular.z = 0.0
                 # Determine the direction to turn based on the furthest distance
             if not self.is_rotating:
@@ -298,10 +298,7 @@ class Turtlebot3ObstacleDetection(Node):
 
             self.cmd_vel_pub.publish(twist)
             time.sleep(0.8)  # Rotations period.
-
-            twist.linear.x = 0.0
-            twist.angular.z = 0.0
-            self.cmd_vel_pub.publish(twist)
+            
             self.is_rotating = False  # Færdig med rotation.
 
         # Use dynamic velocity when obstacle is in FRONT-LEFT.
@@ -323,10 +320,10 @@ class Turtlebot3ObstacleDetection(Node):
             twist.angular.z = -computed_angular
         elif obstacle_distance_left < safety_distance:
             twist.linear.x = self.linear_velocity * 0.9
-            twist.angular.z = self.angular_velocity * 0.6
+            twist.angular.z = self.angular_velocity * 0.7
         elif obstacle_distance_right < safety_distance:
             twist.linear.x = self.linear_velocity * 0.9
-            twist.angular.z = -self.angular_velocity * 0.6
+            twist.angular.z = -self.angular_velocity * 0.7
         else:
             twist.linear.x = self.linear_velocity
             twist.angular.z = 0.0
