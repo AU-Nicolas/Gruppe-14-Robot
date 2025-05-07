@@ -47,12 +47,14 @@ class Turtlebot3ObstacleDetection(Node):
         self.collision_detected = False  # State variabel for kollision
         self.last_collision_time = 0
         self.is_in_collision = False  # State variabel for kollision
+        self.led_on_time = None
+        self.led_active = False
         
         # Path finder variabler:
-        self.tight_space_threshold = 0.5  # Minimum bredde for passage
+        self.tight_space_threshold = 0.30  # Minimum bredde for passage
         self.is_in_tight_space = False
-        self.tight_space_velocity = 0.15  # Langsommere hastighed i smalle passager
-        self.tight_space_angular = 0.8    # Langsommere drejehastighed
+        self.tight_space_velocity = 0.20  # Langsommere hastighed i smalle passager
+        self.tight_space_angular = 0.9    # Langsommere drejehastighed
 
         """************************************************************
         ** Initialise GPIO for LED
@@ -113,6 +115,10 @@ class Turtlebot3ObstacleDetection(Node):
         self.angular_velocity = msg.angular.z
 
     def update_callback(self):
+        if self.led_active and (time.time() - self.led_on_time > 1.0):
+            GPIO.output(self.GPIO_LED, False) # Turns off the LED.
+            self.led_active = False
+
         if self.init_scan_state is True:
             self.detect_obstacle()
  
@@ -140,12 +146,8 @@ class Turtlebot3ObstacleDetection(Node):
         try:
             data = self.bus.read_i2c_block_data(0x44, 0x09, 6)  # Read RGB data
             green = data[1] + data[0] / 256
-            print("##################")
-            print("Green:", green)
             red = data[3] + data[2] / 256
-            print("Red:", red)
             blue = data[5] + data[4] / 256
-            print("Blue:", blue)
 
             current_time = time.time()
 
@@ -155,11 +157,9 @@ class Turtlebot3ObstacleDetection(Node):
                     self.victim_counter += 1
                     self.get_logger().info('Victim detected')
                     GPIO.output(self.GPIO_LED, True) # Turns on the LED.
+                    self.led_on_time = current_time
+                    self.led_active = True
                     self.victim_detected_RGB = True
-                    with open('victim_log.txt', mode='w', encoding="utf-8") as f:
-                        f.write(f"{self.collision_counter}\n")
-                    time.sleep(2) # Wait for 2 seconds.
-                    GPIO.output(self.GPIO_LED, False) # Turns off the LED.
                     self.last_victim_time = current_time
             else:
                 self.victim_detected_RGB = False
@@ -181,10 +181,10 @@ class Turtlebot3ObstacleDetection(Node):
                 obstacle_distance_right_front):
 
         twist = Twist()
-        passage_width = obstacle_distance_left + obstacle_distance_right
+        passage_width = obstacle_distance_left_front + obstacle_distance_right_front
     
         # Find centrum af passagen
-        center_offset = obstacle_distance_right - obstacle_distance_left
+        center_offset = obstacle_distance_right_front - obstacle_distance_left_front
     
         # Check om vi er i en smal passage
         if (passage_width < self.tight_space_threshold * 2 and 
@@ -192,19 +192,16 @@ class Turtlebot3ObstacleDetection(Node):
         
             self.is_in_tight_space = True
             self.get_logger().info('Navigating tight space...')
+
+            twist.linear.x = self.tight_space_velocity
         
             # Juster position i forhold til centrum
             if abs(center_offset) > 0.05:  # Tillad små afvigelser
                 # Juster til venstre eller højre for at centrere
-                twist.linear.x = self.tight_space_velocity
-                if center_offset > 0:  # Mere plads til højre, drej lidt til højre
-                    twist.angular.z = -self.tight_space_angular * 0.5
-                else:  # Mere plads til venstre, drej lidt til venstre
-                    twist.angular.z = self.tight_space_angular * 0.5
-            else:
-                # Kør lige frem hvis centreret
-                twist.linear.x = self.tight_space_velocity
-                twist.angular.z = 0.0
+                turn_strength = max(min(center_offset, 0.5), -0.5)
+                twist.angular.z = -turn_strength * self.tight_space_angular
+            else:  # Mere plads til venstre, drej lidt til venstre
+                    twist.angular.z = 0.0
             
             return True, twist
         
@@ -215,6 +212,26 @@ class Turtlebot3ObstacleDetection(Node):
     # *** NAVIGATIONS PROGRAMMET ***
 
     # LIDAR sensorens syn:
+
+    def compute_dynamic_velocity(self, obs_distance, safety_distance, stop_distance):
+        """
+        Compute dynamic velocities based on the obstacle distance.
+        - For linear velocity: If the obstacle is farther than safety_distance, use full speed.
+          Otherwise, scale linearly from 0 at stop_distance to full speed at safety_distance.
+        - For angular velocity: Suggest an angular speed that is proportional
+          to how much closer the obstacle is compared to safety_distance.
+          (The sign should be applied externally based on turning direction.)
+        """
+        if obs_distance > safety_distance:
+            linear_x = self.linear_velocity
+            angular_component = 0.0
+        else:
+            ratio = (obs_distance - stop_distance) / (safety_distance - stop_distance)
+            ratio = max(0.0, min(1.0, ratio))
+            linear_x = self.linear_velocity * ratio
+            # The further below safety_distance, the sharper the turn (up to self.angular_velocity)
+            angular_component = self.angular_velocity * (1 - ratio)
+        return linear_x, angular_component
 
     def detect_obstacle(self):
         # Samlede antal scanningsområder fra lidar
@@ -242,9 +259,9 @@ class Turtlebot3ObstacleDetection(Node):
 
         # Navigations distancer:
         twist = Twist()
-        safety_distance = 0.4  # Sikkerhedsafstand
-        stop_distance = 0.23  # Stopafstand
-        collision_distance = 0.19  # Kollisionsafstand
+        safety_distance = 0.33  # Sikkerhedsafstand
+        stop_distance = 0.19  # Stopafstand
+        collision_distance = 0.17  # Kollisionsafstand
 
         # NAVIGATIONs PARAMETRER:
 
@@ -262,10 +279,9 @@ class Turtlebot3ObstacleDetection(Node):
 
         if obstacle_distance_front < stop_distance:
             # Forhindring for tæt på, bevæg baglæns
-            self.get_logger().info('Obstacle detected in FRONT. Moving backwards.')
-            twist.linear.x = -self.linear_velocity
+            self.get_logger().info('Obstacle detected in FRONT.')
+            twist.linear.x = self.linear_velocity * 1.0
             twist.angular.z = 0.0
-            self.cmd_vel_pub.publish(twist)
                 # Determine the direction to turn based on the furthest distance
             if not self.is_rotating:
                 if obstacle_distance_right + obstacle_distance_right_front > obstacle_distance_left + obstacle_distance_left_front:
@@ -288,29 +304,30 @@ class Turtlebot3ObstacleDetection(Node):
             self.cmd_vel_pub.publish(twist)
             self.is_rotating = False  # Færdig med rotation.
 
+        # Use dynamic velocity when obstacle is in FRONT-LEFT.
         elif obstacle_distance_left_front < safety_distance:
-            # Forhindring tæt på venstre front, drej til venstre
-            # self.get_logger().info('Obstacle detected in FRONT-LEFT. Turning sharply left.')
-            twist.linear.x = self.linear_velocity * 0.3
-            twist.angular.z = self.angular_velocity * 1.1
+            # Compute dynamic velocities based on measured distance.
+            computed_linear, computed_angular = self.compute_dynamic_velocity(obstacle_distance_left_front,
+                                                                              safety_distance,
+                                                                              stop_distance)
+            # Turning left so angular stays positive.
+            twist.linear.x = computed_linear
+            twist.angular.z = computed_angular
+        # Use dynamic velocity when obstacle is in FRONT-RIGHT.
         elif obstacle_distance_right_front < safety_distance:
-            # Forhindring tæt på højre front, drej til højre
-            # self.get_logger().info('Obstacle detected in FRONT-RIGHT. Turning sharply right.')
-            twist.linear.x = self.linear_velocity * 0.3
-            twist.angular.z = -self.angular_velocity * 1.1
+            computed_linear, computed_angular = self.compute_dynamic_velocity(obstacle_distance_right_front,
+                                                                              safety_distance,
+                                                                              stop_distance)
+            # Turning right so angular becomes negative.
+            twist.linear.x = computed_linear
+            twist.angular.z = -computed_angular
         elif obstacle_distance_left < safety_distance:
-            # Forhindring tæt på venstre, drej til venstre
-            # self.get_logger().info('Obstacle detected in LEFT. Turning left.')
             twist.linear.x = self.linear_velocity * 0.9
             twist.angular.z = self.angular_velocity * 0.6
         elif obstacle_distance_right < safety_distance:
-            # Forhindring tæt på højre, drej til højre
-            # self.get_logger().info('Obstacle detected in RIGHT. Turning right.')
             twist.linear.x = self.linear_velocity * 0.9
             twist.angular.z = -self.angular_velocity * 0.6
         else:
-            # Ingen forhindringer tæt på, bevæg fremad
-            # self.get_logger().info('No obstacles detected. Moving forward.')
             twist.linear.x = self.linear_velocity
             twist.angular.z = 0.0
 
@@ -319,8 +336,6 @@ class Turtlebot3ObstacleDetection(Node):
         # Calculate average speed:
         self.speed_updates = self.speed_updates + 1
         self.speed_accumulation = self.speed_accumulation + twist.linear.x
-        with open('speed_log.txt', mode='w', encoding="utf-8") as f:
-            f.write(f"{self.speed_updates}\n")
 
         # Calculate collision counter:
         current_time = time.time()
@@ -341,8 +356,6 @@ class Turtlebot3ObstacleDetection(Node):
                     self.collision_counter += 1
                     self.get_logger().info(f"Collision detected! Total collisions: {self.collision_counter}")
                     self.last_collision_time = current_time
-                    with open('collision_log.txt', mode='w', encoding="utf-8") as f:
-                        f.write(f"{self.collision_counter}\n")
                 self.is_in_collision = True
         else:
             self.is_in_collision = False

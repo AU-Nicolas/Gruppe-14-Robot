@@ -45,7 +45,14 @@ class Turtlebot3ObstacleDetection(Node):
         self.victim_detected_RGB = False
         self.is_rotating = False # Rotationstilstand i forhold til navigation.
         self.collision_detected = False  # State variabel for kollision
+        self.last_collision_time = 0
         self.is_in_collision = False  # State variabel for kollision
+        
+        # Path finder variabler:
+        self.tight_space_threshold = 0.5  # Minimum bredde for passage
+        self.is_in_tight_space = False
+        self.tight_space_velocity = 0.15  # Langsommere hastighed i smalle passager
+        self.tight_space_angular = 0.8    # Langsommere drejehastighed
 
         """************************************************************
         ** Initialise GPIO for LED
@@ -89,7 +96,7 @@ class Turtlebot3ObstacleDetection(Node):
             self.update_callback)
         
         self.rgb_timer = self.create_timer( # RGB timer, i forhold til aflæsning.
-            2.0,  # unit: s
+            0.2,  # unit: s
             self.read_rgb_sensor)
 
         self.get_logger().info('Turtlebot3 obstacle detection node has been initialised.')
@@ -111,6 +118,12 @@ class Turtlebot3ObstacleDetection(Node):
  
     def get_average_speed(self):
         return self.speed_accumulation/self.speed_updates
+
+    def get_speed_accumulation(self):
+        return self.speed_accumulation
+    
+    def get_speed_updates(self):
+        return self.speed_updates
     
     def stop_robot(self):
         # Stop robot
@@ -127,18 +140,25 @@ class Turtlebot3ObstacleDetection(Node):
         try:
             data = self.bus.read_i2c_block_data(0x44, 0x09, 6)  # Read RGB data
             green = data[1] + data[0] / 256
+            print("##################")
+            print("Green:", green)
             red = data[3] + data[2] / 256
+            print("Red:", red)
             blue = data[5] + data[4] / 256
+            print("Blue:", blue)
+
+            current_time = time.time()
 
             # Determine the color/ if victim is detected:
             if red > green and red > blue:
-                if not self.victim_detected_RGB:
+                if not self.victim_detected_RGB or (current_time - self.last_victim_time > 5.0):
                     self.victim_counter += 1
                     self.get_logger().info('Victim detected')
                     GPIO.output(self.GPIO_LED, True) # Turns on the LED.
-                    time.sleep(2) # Wait for 2 seconds.
+                    self.victim_detected_RGB = True
+                    time.sleep(1) # Wait for 2 seconds.
                     GPIO.output(self.GPIO_LED, False) # Turns off the LED.
-                self.victim_detected_RGB = True
+                    self.last_victim_time = current_time
             else:
                 self.victim_detected_RGB = False
 
@@ -153,6 +173,42 @@ class Turtlebot3ObstacleDetection(Node):
 
     def get_victim_counter(self):
         return self.victim_counter
+
+    def tight_spaces(self, obstacle_distance_left, obstacle_distance_right, 
+                obstacle_distance_front, obstacle_distance_left_front, 
+                obstacle_distance_right_front):
+
+        twist = Twist()
+        passage_width = obstacle_distance_left + obstacle_distance_right
+    
+        # Find centrum af passagen
+        center_offset = obstacle_distance_right - obstacle_distance_left
+    
+        # Check om vi er i en smal passage
+        if (passage_width < self.tight_space_threshold * 2 and 
+            obstacle_distance_front > self.tight_space_threshold):
+        
+            self.is_in_tight_space = True
+            self.get_logger().info('Navigating tight space...')
+        
+            # Juster position i forhold til centrum
+            if abs(center_offset) > 0.05:  # Tillad små afvigelser
+                # Juster til venstre eller højre for at centrere
+                twist.linear.x = self.tight_space_velocity
+                if center_offset > 0:  # Mere plads til højre, drej lidt til højre
+                    twist.angular.z = -self.tight_space_angular * 0.5
+                else:  # Mere plads til venstre, drej lidt til venstre
+                    twist.angular.z = self.tight_space_angular * 0.5
+            else:
+                # Kør lige frem hvis centreret
+                twist.linear.x = self.tight_space_velocity
+                twist.angular.z = 0.0
+            
+            return True, twist
+        
+        self.is_in_tight_space = False
+        return False, twist
+    
 
     # *** NAVIGATIONS PROGRAMMET ***
 
@@ -185,13 +241,22 @@ class Turtlebot3ObstacleDetection(Node):
         # Navigations distancer:
         twist = Twist()
         safety_distance = 0.4  # Sikkerhedsafstand
-        stop_distance = 0.25  # Stopafstand
-        collision_distance = 0.18  # Kollisionsafstand
-
-        if self.is_rotating: # If the robot is rotating, then don't do anything else.
-            return
+        stop_distance = 0.23  # Stopafstand
+        collision_distance = 0.19  # Kollisionsafstand
 
         # NAVIGATIONs PARAMETRER:
+
+        is_tight_space, tight_space_cmd = self.tight_spaces(
+            obstacle_distance_left,
+            obstacle_distance_right,
+            obstacle_distance_front,
+            obstacle_distance_left_front,
+            obstacle_distance_right_front
+        )
+
+        if is_tight_space:
+            self.cmd_vel_pub.publish(tight_space_cmd)
+            return        
 
         if obstacle_distance_front < stop_distance:
             # Forhindring for tæt på, bevæg baglæns
@@ -224,22 +289,22 @@ class Turtlebot3ObstacleDetection(Node):
         elif obstacle_distance_left_front < safety_distance:
             # Forhindring tæt på venstre front, drej til venstre
             # self.get_logger().info('Obstacle detected in FRONT-LEFT. Turning sharply left.')
-            twist.linear.x = self.linear_velocity * 1
+            twist.linear.x = self.linear_velocity * 0.3
             twist.angular.z = self.angular_velocity * 1.1
         elif obstacle_distance_right_front < safety_distance:
             # Forhindring tæt på højre front, drej til højre
             # self.get_logger().info('Obstacle detected in FRONT-RIGHT. Turning sharply right.')
-            twist.linear.x = self.linear_velocity * 1
+            twist.linear.x = self.linear_velocity * 0.3
             twist.angular.z = -self.angular_velocity * 1.1
         elif obstacle_distance_left < safety_distance:
             # Forhindring tæt på venstre, drej til venstre
             # self.get_logger().info('Obstacle detected in LEFT. Turning left.')
-            twist.linear.x = self.linear_velocity
+            twist.linear.x = self.linear_velocity * 0.9
             twist.angular.z = self.angular_velocity * 0.6
         elif obstacle_distance_right < safety_distance:
             # Forhindring tæt på højre, drej til højre
             # self.get_logger().info('Obstacle detected in RIGHT. Turning right.')
-            twist.linear.x = self.linear_velocity
+            twist.linear.x = self.linear_velocity * 0.9
             twist.angular.z = -self.angular_velocity * 0.6
         else:
             # Ingen forhindringer tæt på, bevæg fremad
@@ -260,13 +325,18 @@ class Turtlebot3ObstacleDetection(Node):
         is_collision = (obstacle_distance_front < collision_distance or 
                     obstacle_distance_left_front < collision_distance or 
                     obstacle_distance_right_front < collision_distance)
+        
+        current_time = time.time()
+    
 
         # Hvis vi registrerer en kollision og ikke er i en kollisionstilstand
-        if is_collision and not self.is_in_collision:
+        if is_collision:
+            if not self.is_in_collision:
             # Tjek om der er gået nok tid siden sidste kollision
-            if not self.collision_detected:
-                self.collision_counter += 1
-                self.get_logger().info(f"Collision detected! Total collisions: {self.collision_counter}")
-                self.collision_detected = True  # Mark that we already counted this collision
-            else:
-                self.collision_detected = False  # Reset flag once robot moves away
+                if current_time - self.last_collision_time > 1.5:
+                    self.collision_counter += 1
+                    self.get_logger().info(f"Collision detected! Total collisions: {self.collision_counter}")
+                    self.last_collision_time = current_time
+                self.is_in_collision = True
+        else:
+            self.is_in_collision = False
