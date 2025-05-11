@@ -24,7 +24,7 @@ from sensor_msgs.msg import LaserScan
 import rclpy
 import time
 import smbus
-import RPi.GPIO as GPIO  # For LED
+import RPi.GPIO as GPIO # For LED
 
 class Turtlebot3ObstacleDetection(Node):
 
@@ -50,11 +50,11 @@ class Turtlebot3ObstacleDetection(Node):
         self.led_on_time = None
         self.led_active = False
         
-        # Path finder variabler:
-        self.tight_space_threshold = 0.30  # Minimum bredde for passage
+        # Thight_Spaces variabler:
+        self.tight_space_threshold = 0.30 # Minimum bredde for passage
         self.is_in_tight_space = False
-        self.tight_space_velocity = 0.20  # Langsommere hastighed i smalle passager
-        self.tight_space_angular = 0.9    # Langsommere drejehastighed
+        self.tight_space_velocity = 0.20 # Langsommere hastighed i smalle passager
+        self.tight_space_angular = 0.9 # Langsommere drejehastighed
 
         """************************************************************
         ** Initialise GPIO for LED
@@ -104,7 +104,7 @@ class Turtlebot3ObstacleDetection(Node):
         self.get_logger().info('Turtlebot3 obstacle detection node has been initialised.')
 
     """*******************************************************************************
-    ** Callback functions and relevant functions
+    ** Callback functions and other functions
     *******************************************************************************"""
     def scan_callback(self, msg):
         self.scan_ranges = msg.ranges
@@ -144,7 +144,7 @@ class Turtlebot3ObstacleDetection(Node):
 
     def read_rgb_sensor(self):
         try:
-            data = self.bus.read_i2c_block_data(0x44, 0x09, 6)  # Read RGB data
+            data = self.bus.read_i2c_block_data(0x44, 0x09, 6) # Read RGB data
             green = data[1] + data[0] / 256
             red = data[3] + data[2] / 256
             blue = data[5] + data[4] / 256
@@ -153,7 +153,7 @@ class Turtlebot3ObstacleDetection(Node):
 
             # Determine the color/ if victim is detected:
             if red > green and red > blue:
-                if not self.victim_detected_RGB or (current_time - self.last_victim_time > 5.0):
+                if not self.victim_detected_RGB or (current_time - self.last_victim_time > 5.0): # Checks state, and time.
                     self.victim_counter += 1
                     self.get_logger().info('Victim detected')
                     GPIO.output(self.GPIO_LED, True) # Turns on the LED.
@@ -164,7 +164,7 @@ class Turtlebot3ObstacleDetection(Node):
             else:
                 self.victim_detected_RGB = False
 
-        # In case we get a weird value
+        # In case we get a weird value.
         except Exception as e:
             self.get_logger().error(f"Error reading RGB sensor: {e}")
 
@@ -183,10 +183,10 @@ class Turtlebot3ObstacleDetection(Node):
         twist = Twist()
         passage_width = obstacle_distance_left_front + obstacle_distance_right_front
     
-        # Find centrum af passagen
+        # Find centrum af passagen.
         center_offset = obstacle_distance_right_front - obstacle_distance_left_front
     
-        # Check om vi er i en smal passage
+        # Tjek om vi er i en smal passage.
         if (passage_width < self.tight_space_threshold * 2 and 
             obstacle_distance_front > self.tight_space_threshold):
         
@@ -208,11 +208,11 @@ class Turtlebot3ObstacleDetection(Node):
         self.is_in_tight_space = False
         return False, twist
     
-
-    # *** NAVIGATIONS PROGRAMMET ***
+    """*******************************************************************************
+    ** NAVIGATION
+    *******************************************************************************"""
 
     # LIDAR sensorens syn:
-
     def detect_obstacle(self):
         # Samlede antal scanningsområder fra lidar
         total_ranges = len(self.scan_ranges)
@@ -239,12 +239,11 @@ class Turtlebot3ObstacleDetection(Node):
 
         # Navigations distancer:
         twist = Twist()
-        safety_distance = 0.33  # Sikkerhedsafstand
-        stop_distance = 0.21  # Stopafstand
-        collision_distance = 0.17  # Kollisionsafstand
+        safety_distance = 0.33  # Sikkerhedsafstand - General navigation/Collision avoidance.
+        stop_distance = 0.21  # Stopafstand - Incase something is to close.
+        collision_distance = 0.17 # Kollisionsafstand - For collision detection.
 
         # NAVIGATIONs PARAMETRER:
-
         is_tight_space, tight_space_cmd = self.tight_spaces(
             obstacle_distance_left,
             obstacle_distance_right,
@@ -258,11 +257,11 @@ class Turtlebot3ObstacleDetection(Node):
             return        
 
         if obstacle_distance_front < stop_distance:
-            # Forhindring for tæt på, bevæg baglæns
+            # Obstacle in front, stops and rotates.
             self.get_logger().info('Obstacle detected in FRONT.')
             twist.linear.x = -self.linear_velocity
             twist.angular.z = 0.0
-                # Determine the direction to turn based on the furthest distance
+                # Checking the direction to turn based on the furthest distance.
             if not self.is_rotating:
                 if obstacle_distance_right + obstacle_distance_right_front > obstacle_distance_left + obstacle_distance_left_front:
                     self.get_logger().info('Turning right.')
@@ -272,17 +271,16 @@ class Turtlebot3ObstacleDetection(Node):
                     self.get_logger().info('Turning left.')
                     twist.linear.x = 0.0
                     twist.angular.z = self.angular_velocity * 1.0
-                self.is_rotating = True  # Indikerer at robotten roterer
+                self.is_rotating = True  # Rotate state.
             else:
-                self.is_rotating = False  # Stop rotation
+                self.is_rotating = False  # Stops the rotating state.
 
             self.cmd_vel_pub.publish(twist)
-            time.sleep(0.8)  # Rotations period.
-
+            time.sleep(0.8) # Rotation period.
             twist.linear.x = 0.0
             twist.angular.z = 0.0
             self.cmd_vel_pub.publish(twist)
-            self.is_rotating = False  # Færdig med rotation.
+            self.is_rotating = False  # Stops the rotating state.
 
         elif obstacle_distance_left_front < safety_distance:
             # Forhindring tæt på venstre front, drej til venstre
@@ -327,7 +325,7 @@ class Turtlebot3ObstacleDetection(Node):
         current_time = time.time()
     
 
-        # Hvis vi registrerer en kollision og ikke er i en kollisionstilstand
+        # Hvis vi registrerer en kollision og ikke er i en kollisionstilstand.
         if is_collision:
             if not self.is_in_collision:
             # Tjek om der er gået nok tid siden sidste kollision

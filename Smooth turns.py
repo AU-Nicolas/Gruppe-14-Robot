@@ -44,17 +44,17 @@ class Turtlebot3ObstacleDetection(Node):
         self.victim_counter = 0 # Victim counter i forhold til RGB.
         self.victim_detected_RGB = False
         self.is_rotating = False # Rotationstilstand i forhold til navigation.
-        self.collision_detected = False  # State variabel for kollision
+        self.collision_detected = False # State variabel for kollision
         self.last_collision_time = 0
-        self.is_in_collision = False  # State variabel for kollision
+        self.is_in_collision = False # State variabel for kollision
         self.led_on_time = None
         self.led_active = False
         
         # Path finder variabler:
-        self.tight_space_threshold = 0.30  # Minimum bredde for passage
+        self.tight_space_threshold = 0.30 # Minimum bredde for passage
         self.is_in_tight_space = False
-        self.tight_space_velocity = 0.20  # Langsommere hastighed i smalle passager
-        self.tight_space_angular = 0.9    # Langsommere drejehastighed
+        self.tight_space_velocity = 0.20 # Langsommere hastighed i smalle passager
+        self.tight_space_angular = 0.9 # Langsommere drejehastighed
 
         """************************************************************
         ** Initialise GPIO for LED
@@ -94,11 +94,11 @@ class Turtlebot3ObstacleDetection(Node):
         ** Initialise timers
         ************************************************************"""
         self.update_timer = self.create_timer(
-            0.010,  # unit: s
+            0.010, # unit: s
             self.update_callback)
         
         self.rgb_timer = self.create_timer( # RGB timer, i forhold til aflæsning.
-            0.2,  # unit: s
+            0.2, # unit: s
             self.read_rgb_sensor)
 
         self.get_logger().info('Turtlebot3 obstacle detection node has been initialised.')
@@ -144,7 +144,7 @@ class Turtlebot3ObstacleDetection(Node):
 
     def read_rgb_sensor(self):
         try:
-            data = self.bus.read_i2c_block_data(0x44, 0x09, 6)  # Read RGB data
+            data = self.bus.read_i2c_block_data(0x44, 0x09, 6) # Read RGB data
             green = data[1] + data[0] / 256
             red = data[3] + data[2] / 256
             blue = data[5] + data[4] / 256
@@ -211,16 +211,15 @@ class Turtlebot3ObstacleDetection(Node):
 
     # *** NAVIGATIONS PROGRAMMET ***
 
-    # LIDAR sensorens syn:
+    # Smooth turns:
 
     def compute_dynamic_velocity(self, obs_distance, safety_distance, stop_distance):
         """
         Compute dynamic velocities based on the obstacle distance.
         - For linear velocity: If the obstacle is farther than safety_distance, use full speed.
           Otherwise, scale linearly from 0 at stop_distance to full speed at safety_distance.
-        - For angular velocity: Suggest an angular speed that is proportional
+        - For angular velocity: Sets the angular speed that is proportional
           to how much closer the obstacle is compared to safety_distance.
-          (The sign should be applied externally based on turning direction.)
         """
         if obs_distance > safety_distance:
             linear_x = self.linear_velocity
@@ -232,6 +231,8 @@ class Turtlebot3ObstacleDetection(Node):
             # The further below safety_distance, the sharper the turn (up to self.angular_velocity)
             angular_component = self.angular_velocity * (1 - ratio) * 1.2
         return linear_x, angular_component
+
+    # LIDAR vision:
 
     def detect_obstacle(self):
         # Samlede antal scanningsområder fra lidar
@@ -273,6 +274,8 @@ class Turtlebot3ObstacleDetection(Node):
             obstacle_distance_right_front
         )
         
+        # The actual navigation:
+
         if is_tight_space:
             self.cmd_vel_pub.publish(tight_space_cmd)
             return        
