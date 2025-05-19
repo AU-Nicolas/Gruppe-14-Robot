@@ -34,10 +34,10 @@ class Turtlebot3ObstacleDetection(Node):
         """************************************************************
         ** Initialise variables
         ************************************************************"""
-        self.linear_velocity = 0.2  # unit: m/s
-        self.angular_velocity = 1.5  # unit: m/s
+        self.linear_velocity = 0.2 # unit: m/s
+        self.angular_velocity = 1.5 # unit: m/s
         self.scan_ranges = []
-        self.init_scan_state = False  # To get the initial scan data at the beginning
+        self.init_scan_state = False # To get the initial scan data at the beginning
         self.speed_accumulation = 0
         self.speed_updates = 0
         self.collision_counter = 0 # Collision counter
@@ -59,9 +59,9 @@ class Turtlebot3ObstacleDetection(Node):
         """************************************************************
         ** Initialise GPIO for LED
         ************************************************************"""
-        GPIO.setmode(GPIO.BCM)  # Brug BCM GPIO-numre
-        self.GPIO_LED = 17  # LED 3.3 v sat til pin 17.
-        GPIO.setup(self.GPIO_LED, GPIO.OUT)  # Konfigurer LED som output
+        GPIO.setmode(GPIO.BCM) # Brug BCM GPIO-numre
+        self.GPIO_LED = 17 # LED 3.3 v sat til pin 17.
+        GPIO.setup(self.GPIO_LED, GPIO.OUT) # Konfigurer LED som output
 
         """************************************************************
         ** Initialise ROS publishers and subscribers
@@ -94,7 +94,7 @@ class Turtlebot3ObstacleDetection(Node):
         ** Initialise timers
         ************************************************************"""
         self.update_timer = self.create_timer(
-            0.010,  # unit: s
+            0.010, # unit: s
             self.update_callback)
         
         self.rgb_timer = self.create_timer( # RGB timer, i forhold til aflæsning.
